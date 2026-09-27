@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# Secrets & local state
+.env
+data/
+
+# Model weights (large binaries; download separately, see README)
+models/*.pt
+models/*.pth
+models/*.history.json
+*.tmp
+
+# Notebooks / OS
+.ipynb_checkpoints/
+.DS_Store

@@ -1,0 +1,9 @@
+# Runtime dependencies (pyproject.toml is the source of truth; prefer `pip install -e ".[all]"`).
+torch>=2.2
+torchvision>=0.17
+numpy>=1.24
+pillow>=10.0
+sqlalchemy>=2.0
+python-dotenv>=1.0
+pymysql>=1.1        # MySQL / HeidiSQL backend
+twilio>=9.0         # SMS notifications
