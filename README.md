@@ -88,18 +88,34 @@ flowchart LR
 
 The fastest path on any OS — one script handles the venv, dependencies, and `.env`:
 
+**macOS / Linux** (or Windows via Git Bash / WSL):
+
 ```bash
 ./deploy.sh              # set up, then launch the desktop GUI
 ./deploy.sh doctor       # set up, then run any drscreen command instead
 ./deploy.sh setup        # just set up; don't run anything
 ```
 
-`deploy.sh` is a Bash script, so it runs natively on **macOS** and **Linux**, and on
-**Windows** via **Git Bash** (ships with [Git for Windows](https://git-scm.com/download/win))
-or **WSL** — a `.sh` file can't be double-clicked or run from `cmd.exe`/PowerShell directly,
-which is a Windows limitation no script content can work around. It detects the OS, finds a
-Python 3.10+ interpreter, creates `.venv` (recovering gracefully if pip wasn't bundled — e.g.
-a venv created by `uv`), installs the project, and copies `.env.example` → `.env` on first run.
+`deploy.sh` is a Bash script — a `.sh` file can't be double-clicked or run from
+`cmd.exe`/PowerShell directly, which is a Windows limitation no script content can work
+around. On Windows it needs **Git Bash** (ships with
+[Git for Windows](https://git-scm.com/download/win)) or **WSL**; run it from one of those
+shells, not from PowerShell.
+
+**Windows (native PowerShell)** — no Git Bash or WSL required:
+
+```powershell
+.\deploy.ps1              # set up, then launch the desktop GUI
+.\deploy.ps1 doctor       # set up, then run any drscreen command instead
+.\deploy.ps1 setup        # just set up; don't run anything
+```
+
+If PowerShell refuses to run it ("running scripts is disabled on this system"), run once:
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, confirm, then re-run `.\deploy.ps1`.
+
+Either script finds a Python 3.10+ interpreter, creates `.venv` (recovering gracefully if pip
+wasn't bundled — e.g. a venv created by `uv`), installs the project, and copies
+`.env.example` → `.env` on first run.
 
 Or by hand:
 
