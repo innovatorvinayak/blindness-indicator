@@ -1,8 +1,8 @@
-# drscreen deploy/run script — native Windows PowerShell equivalent of deploy.sh.
+﻿# drscreen deploy/run script  -  native Windows PowerShell equivalent of deploy.sh.
 #
 # deploy.sh needs bash (Git Bash or WSL) to run on Windows. This script does the
-# same job — create/locate .venv, install dependencies, set up .env, then launch
-# drscreen — using only PowerShell, so no extra tooling is required.
+# same job  -  create/locate .venv, install dependencies, set up .env, then launch
+# drscreen  -  using only PowerShell, so no extra tooling is required.
 #
 # Usage (run from PowerShell, in this folder):
 #   .\deploy.ps1                    # set up the environment, then launch the GUI
@@ -95,7 +95,7 @@ if (-not $SkipSetup) {
     & $VenvPython -m pip install --upgrade --quiet pip
     & $VenvPython -m pip install --quiet -e "${ScriptDir}[all]"
     if ($LASTEXITCODE -ne 0) {
-        Fail "Dependency installation failed — see the pip output above."
+        Fail "Dependency installation failed  -  see the pip output above."
     }
     Ok "Dependencies installed."
 } else {
@@ -107,24 +107,24 @@ $EnvFile = Join-Path $ScriptDir ".env"
 $EnvExample = Join-Path $ScriptDir ".env.example"
 if (-not (Test-Path $EnvFile) -and (Test-Path $EnvExample)) {
     Copy-Item $EnvExample $EnvFile
-    WarnMsg "Created .env from .env.example. Edit it to set your clinic name, SMS provider credentials, etc. — see README.md."
+    WarnMsg "Created .env from .env.example. Edit it to set your clinic name, SMS provider credentials, etc.  -  see README.md."
 }
 
 # -- model weights: warn, don't fail (some commands don't need them) -------------------
 $ModelFile = Join-Path $ScriptDir "models\classifier.pt"
 if (-not (Test-Path $ModelFile)) {
-    WarnMsg "models\classifier.pt not found — 'predict'/'gui'/'evaluate' need it. See models\README.md to download or train one."
+    WarnMsg "models\classifier.pt not found  -  'predict'/'gui'/'evaluate' need it. See models\README.md to download or train one."
 }
 
 Ok "Setup complete."
 
 # -- run ---------------------------------------------------------------------------------
 if ($Args_.Count -eq 1 -and $Args_[0] -eq "setup") {
-    # "setup" isn't a real `drscreen` subcommand — it means what it says here:
+    # "setup" isn't a real `drscreen` subcommand  -  it means what it says here:
     # do the environment setup above, then stop.
     exit 0
 } elseif ($Args_.Count -eq 0) {
-    Info "No command given — launching the desktop GUI (drscreen gui)."
+    Info "No command given  -  launching the desktop GUI (drscreen gui)."
     & $VenvDrscreen gui
 } else {
     Info "Running: drscreen $($Args_ -join ' ')"
