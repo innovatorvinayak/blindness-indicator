@@ -14,17 +14,20 @@ import html
 from dataclasses import dataclass
 from pathlib import Path
 
+from drscreen.branding import render_logo_png_bytes
 from drscreen.grading import Grade
-from drscreen.gui.branding import render_logo_png_bytes
 from drscreen.storage import ScreeningDetail
 
-# Deliberately not importing drscreen.gui.theme: the GUI's tkinter colour
-# system doesn't apply to HTML/CSS, but the two brand colours are the same
-# source of truth, restated here for the web-safe half of the design system.
-EMERALD = "#064E3B"
-CREAM = "#F8E7C9"
+# The report stays a *light* document even though the app UI is dark: it is
+# meant to be printed and handed to a referral ophthalmologist, and a dark
+# background is wrong on paper. So it uses print-legible counterparts of the
+# brand colours rather than the screen ones from drscreen.theme.
+VOID = "#05070F"
+CYAN = "#0E7490"      # darkened from the UI's #22D3EE for contrast on white
+VIOLET = "#6D28D9"
 
-_GRADE_COLORS = ("#1e7e46", "#6b8e23", "#c9971f", "#c96a1f", "#b23a3a")
+# Likewise darkened: the UI's neon grades are unreadable on a white page.
+_GRADE_COLORS = ("#0E9F6E", "#4D7C0F", "#B45309", "#C2410C", "#BE123C")
 
 _MIME_BY_SUFFIX = {
     ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
@@ -187,22 +190,24 @@ def _embed_image(path: str) -> str | None:
 
 _CSS = f"""
 :root {{
-  --emerald: {EMERALD};
-  --cream: {CREAM};
-  --ink: #16261f;
-  --muted: #5c6b62;
-  --border: #d9cfa8;
-  --surface: #fffdf6;
+  --void: {VOID};
+  --cyan: {CYAN};
+  --violet: {VIOLET};
+  --ink: #0f172a;
+  --muted: #64748b;
+  --border: #dbe3ec;
+  --surface: #ffffff;
 }}
 * {{ box-sizing: border-box; }}
 body {{
-  margin: 0; background: #ece3cf;
+  margin: 0; background: #eef2f7;
   font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
   color: var(--ink);
 }}
 .page {{ max-width: 880px; margin: 24px auto; background: var(--surface);
-  border-radius: 14px; overflow: hidden; box-shadow: 0 12px 40px rgba(6,78,59,0.18); }}
-header {{ background: var(--emerald); color: var(--cream); padding: 28px 32px;
+  border-radius: 14px; overflow: hidden; box-shadow: 0 12px 40px rgba(15,23,42,0.14); }}
+header {{ background: linear-gradient(115deg, var(--void), #14213d 60%, var(--violet));
+  color: #e6edf7; padding: 28px 32px;
   display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }}
 .brand {{ display: flex; align-items: center; gap: 14px; }}
 .mark {{ width: 44px; height: 44px; border-radius: 12px; flex: none;
@@ -214,10 +219,10 @@ header {{ background: var(--emerald); color: var(--cream); padding: 28px 32px;
   text-transform: uppercase; letter-spacing: .06em; }}
 .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 24px 32px 0; }}
 @media (max-width: 640px) {{ .grid {{ grid-template-columns: 1fr; }} }}
-.card {{ background: #fbf6e8; border: 1px solid var(--border); border-radius: 12px;
+.card {{ background: #f8fafc; border: 1px solid var(--border); border-radius: 12px;
   padding: 18px 20px; }}
 .card h2 {{ margin: 0 0 12px; font-size: 13px; text-transform: uppercase;
-  letter-spacing: .06em; color: var(--emerald); }}
+  letter-spacing: .06em; color: var(--cyan); }}
 dl {{ margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; }}
 dl.two-col {{ grid-template-columns: 1fr 1fr; }}
 dt {{ color: var(--muted); font-size: 12.5px; }}
@@ -245,11 +250,11 @@ table.probabilities {{ width: 100%; border-collapse: collapse; margin-top: 14px;
 table.probabilities th {{ text-align: left; font-size: 11px; text-transform: uppercase;
   letter-spacing: .05em; color: var(--muted); padding: 6px 8px;
   border-bottom: 1px solid var(--border); }}
-table.probabilities td {{ padding: 7px 8px; border-bottom: 1px solid #eee2c4; }}
+table.probabilities td {{ padding: 7px 8px; border-bottom: 1px solid #eef2f7; }}
 tr.predicted td {{ font-weight: 700; }}
 .pct {{ width: 60px; }}
 .bar-cell {{ width: 40%; }}
-.bar-track {{ background: #eee2c4; border-radius: 6px; height: 8px; overflow: hidden; }}
+.bar-track {{ background: #e8edf4; border-radius: 6px; height: 8px; overflow: hidden; }}
 .bar-fill {{ height: 100%; border-radius: 6px; }}
 .technical {{ margin: 20px 32px 0; }}
 footer {{ margin: 24px 32px 32px; padding-top: 16px; border-top: 1px solid var(--border);

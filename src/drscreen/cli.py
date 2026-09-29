@@ -39,8 +39,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-v", "--verbose", action="store_true")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("gui", help="launch the desktop screening application")
-    p.set_defaults(handler=cmd_gui)
+    p = sub.add_parser("web", help="serve the JSON API behind the Next.js UI")
+    p.add_argument("--host", default="127.0.0.1", help="0.0.0.0 to accept connections "
+                   "from other machines (e.g. behind a reverse proxy)")
+    p.add_argument("--port", type=int, default=8000)
+    p.add_argument("--reload", action="store_true", help="auto-reload on code changes (dev only)")
+    p.set_defaults(handler=cmd_web)
 
     p = sub.add_parser("predict", help="grade one or more images / folders")
     p.add_argument("images", nargs="+", type=Path)
@@ -118,10 +122,11 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def cmd_gui(args, settings: Settings) -> int:
-    from drscreen.gui.app import run
+def cmd_web(args, settings: Settings) -> int:
+    from drscreen.web.app import run
 
-    return run(settings)
+    run(settings, host=args.host, port=args.port, reload=args.reload)
+    return 0
 
 
 def cmd_predict(args, settings: Settings) -> int:
@@ -374,6 +379,12 @@ def cmd_doctor(args, settings: Settings) -> int:
         report("database", False, f"{_redact(settings.database_url)}: {exc}")
     report("sms", True, "Twilio configured" if settings.twilio.configured and
            settings.sms_enabled else "dry-run (Twilio not configured or disabled)")
+    from drscreen import chat
+
+    reachable = chat.is_reachable(settings.ollama)
+    chat_detail = (f"reachable at {settings.ollama.host} ({settings.ollama.model})"
+                   if reachable else "not reachable (optional; disables the chat assistant)")
+    print(f"[{'ok' if reachable else 'warn':>4}] {'chat':<10} {chat_detail}")
     return 0 if ok else 1
 
 

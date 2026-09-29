@@ -1,0 +1,56 @@
+# The app — the Next.js UI is built into the image and served by FastAPI on
+# one port — plus a local Ollama for the chat assistant. Portable to any
+# Docker-capable host: Render, Railway, Fly.io, or a plain VPS.
+#
+# SQLite (a file on the app volume) is the default database for simplicity.
+# For several concurrent operators, point DRS_DATABASE_URL at a managed
+# MySQL/Postgres instead — both drivers are already in the image.
+#
+# Quick start:
+#   cp .env.example .env        # clinic name, SMS credentials, DRS_SECRET_KEY
+#   docker compose up -d --build
+#   open http://localhost:8000
+#
+# Put a reverse proxy (Caddy, nginx, your host's built-in one) with a real
+# TLS certificate in front of the `app` service for a public domain.
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"          # UI and API are both here
+    env_file:
+      - .env
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    volumes:
+      - app_data:/app/data
+      - ./models:/app/models:ro
+    depends_on:
+      ollama-pull:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+  # One-shot: pulls the chat model on first start so it's ready before the
+  # first request, then exits. Safe to re-run - Ollama skips a model it
+  # already has. If your Compose version lacks
+  # `service_completed_successfully`, run `docker compose up ollama-pull`
+  # once by hand instead.
+  ollama-pull:
+    image: ollama/ollama:latest
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c", "ollama pull ${OLLAMA_MODEL:-llama3.2:3b}"]
+    depends_on:
+      - ollama
+    restart: "no"
+
+volumes:
+  app_data:
+  ollama_data:

@@ -6,6 +6,7 @@ Secrets (DB password, Twilio token) never live in source code; see .env.example.
 from __future__ import annotations
 
 import os
+import secrets
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -44,6 +45,24 @@ class TwilioSettings:
 
 
 @dataclass(frozen=True)
+class OllamaSettings:
+    """Local-LLM chat assistant (via Ollama) that explains a screening result
+    in plain language. Scoped deliberately narrow — see drscreen.chat — so it
+    never substitutes for the referral advice the model itself already gives.
+    """
+
+    host: str = "http://localhost:11434"
+    model: str = "llama3.2:3b"
+    # Optional vision model, used only to enrich the detailed report with
+    # descriptive observations. It never decides the grade, and it is not
+    # the fundus gate -- drscreen.retina handles that deterministically.
+    # Needs a capable model: `ollama pull llava`. (moondream was measured
+    # and is unusable here -- it answers "yes" to every image.)
+    vision_model: str = "llava"
+    enabled: bool = True
+
+
+@dataclass(frozen=True)
 class Fast2SmsSettings:
     """Fast2SMS (India): a free-quota alternative to Twilio for trying SMS
     without a paid account. Sign up at fast2sms.com for an API key — the
@@ -74,6 +93,13 @@ class Settings:
     clinic_name: str = "DR Screening Centre"
     twilio: TwilioSettings = field(default_factory=TwilioSettings)
     fast2sms: Fast2SmsSettings = field(default_factory=Fast2SmsSettings)
+    ollama: OllamaSettings = field(default_factory=OllamaSettings)
+    # Signs the web app's session cookies. Auto-generated (and logged as a
+    # warning) if unset, which is fine for local/dev use — every restart
+    # invalidates existing sessions, forcing a re-login. Set DRS_SECRET_KEY
+    # explicitly for any real deployment so sessions survive a restart and
+    # can't be forged by guessing a freshly-generated key.
+    secret_key: str = field(default_factory=lambda: secrets.token_hex(32))
 
     @classmethod
     def from_env(cls, env_file: str | os.PathLike | None = None) -> Settings:
@@ -110,11 +136,18 @@ class Settings:
                 api_key=_env("FAST2SMS_API_KEY"),
                 route=_env("FAST2SMS_ROUTE", defaults.fast2sms.route),
             ),
+            ollama=OllamaSettings(
+                host=_env("OLLAMA_HOST", defaults.ollama.host),
+                model=_env("OLLAMA_MODEL", defaults.ollama.model),
+                vision_model=_env("OLLAMA_VISION_MODEL", defaults.ollama.vision_model),
+                enabled=_env_bool("OLLAMA_ENABLED", defaults.ollama.enabled),
+            ),
+            secret_key=_env("DRS_SECRET_KEY", defaults.secret_key),
         )
 
 
 def update_env(pairs: dict[str, str], env_file: str | os.PathLike | None = None) -> Path:
-    """Persist settings changes made in the GUI's Settings screen to ``.env``,
+    """Persist settings changes made in the web app's Settings page to ``.env``,
     so they survive a restart instead of only affecting the running process."""
     from dotenv import set_key
 

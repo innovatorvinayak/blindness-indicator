@@ -1,0 +1,16 @@
+.venv/
+.env
+data/
+models/*.pt
+models/*.pth
+.git/
+.pytest_cache/
+__pycache__/
+*.pyc
+tests/
+docs/
+*.md
+!README.md
+frontend/node_modules
+frontend/.next
+frontend/out

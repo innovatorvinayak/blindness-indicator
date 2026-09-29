@@ -1,8 +1,10 @@
 # AI-Based Diabetic Retinopathy Detection and Severity Classification
 
-A desktop screening station that grades retinal fundus photographs for **Diabetic
+A web-based screening application that grades retinal fundus photographs for **Diabetic
 Retinopathy (DR)** on the 5-point clinical scale. It uses a fine-tuned **ResNet-152**
-(PyTorch). Each result is saved to **MySQL**, and the patient can get it by **SMS** (Twilio).
+(PyTorch). Each result is saved to **MySQL** (or SQLite/Postgres), the patient can get it
+by **SMS** (Twilio/Fast2SMS), and an operator can ask a local **AI chat assistant**
+(Ollama) to explain any result in plain language.
 
 | Grade | Meaning | Suggested action |
 |:---:|---|---|
@@ -23,75 +25,131 @@ Retinopathy (DR)** on the 5-point clinical scale. It uses a fine-tuned **ResNet-
 
 ```mermaid
 flowchart LR
-    A[Operator signs in] --> B[Enter patient details<br/>+ choose fundus image]
+    A[Operator signs in<br/>web browser] --> B[Enter patient details<br/>+ choose fundus image]
     B --> C[Preprocess<br/>resize 224², normalise]
     C --> D[ResNet-152<br/>+ flip TTA]
     D --> E[Grade 0–4 + probabilities<br/>+ referral decision]
-    E --> F[(MySQL / SQLite<br/>patients, screenings)]
-    E --> G[GUI result card]
-    E -->|optional| H[Twilio SMS<br/>to patient]
+    E --> F[(MySQL / SQLite / Postgres<br/>patients, screenings)]
+    E --> G[Result panel + report]
+    E -->|optional| H[Twilio / Fast2SMS<br/>to patient]
+    E -->|optional| I[Ollama chat<br/>explains the result]
 ```
 
-1. **Upload.** The operator enters the patient's name, mobile number, age and sex, then picks a fundus image.
+1. **Upload.** The operator enters the patient's name, mobile number, age and sex, then picks a fundus image in the browser.
 2. **Preprocess.** The image is converted to RGB (transparency is flattened onto black), resized, and normalised exactly as it was during training.
 3. **Analyse.** ResNet-152 scores the image and its mirror image, and the two scores are averaged (test-time augmentation, TTA).
-4. **Predict.** The app outputs a severity grade, the probability for each class, and a *referral* flag based on P(grade ≥ Moderate).
-5. **Display.** The result card shows the grade (colour-coded), probability bars, advice and image-quality warnings.
+4. **Predict.** The app returns a severity grade, the probability for each class, and a *referral* flag based on P(grade ≥ Moderate).
+5. **Display.** The result panel shows the grade (colour-coded), animated probability bars, advice and image-quality warnings — no page reload.
 6. **Store.** The patient record, the result, the model version and an archived copy of the image are saved to the database.
 7. **Notify.** If requested, the patient gets a short SMS report.
+8. **Explain (optional).** The operator can ask a chat assistant questions about *this* result — it's scoped to the screening at hand, not general medical advice.
 
 ## Features
 
-- **Detection and severity grading** (0–4) with per-class probability bars and a referral
-  flag you can tune, which lets you lower false negatives (Type-II errors).
+- **Detection and severity grading** (0–4) with animated per-class probability bars and a
+  referral flag you can tune, which lets you lower false negatives (Type-II errors).
 - **Single-image and batch testing** from the CLI, including the bundled `sampleimages/`.
 - **Reproducible training**: a fixed stratified split, class-weighted loss, a mixed-precision
   one-cycle schedule, model selection on **QWK** (the APTOS metric), and early stopping.
 - **Evaluation**: accuracy, QWK, per-class precision/recall, confusion matrix, and
   sensitivity/specificity for referable DR across thresholds.
-- **Desktop GUI** (Tkinter, on top of [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter)
-  for scrolling and [Pillow](https://python-pillow.org/) for imaging — everything else
-  hand-built): a branded "Emerald & Ivory" glassmorphic interface — a custom rendered logo,
-  a living animated landing/login screen, and a screening dashboard whose bars, image
-  preview, and buttons genuinely rescale with the window. Scrolling (trackpad, mouse wheel,
-  or the scrollbar) is handled by CustomTkinter rather than a hand-rolled mechanism, since
-  its mousewheel handling has been battle-tested across real macOS/Windows/Linux use far
-  more than anything written from scratch for this project could be. Runs on a worker
-  thread so it never freezes during inference.
-- **Full detailed reports, viewed in the app**: every screening gets a complete report —
-  patient details, the fundus image, grade, full probability breakdown, referral
-  recommendation, this patient's screening history/trend, model provenance — rendered
-  natively (double-click any history row, or "View full report"; works instantly, no
-  model load needed). A one-click "Export as HTML" still produces a portable,
-  printable/emailable file for anyone who needs one.
-- **Recent Screenings is its own page**, one click from the dashboard header (or
-  `Ctrl/Cmd+F`) — search, "referrals only" filter, CSV export, and double-click-to-report
-  all live there, so the main screening workflow never depends on scrolling past a table.
-- **MySQL storage** (HeidiSQL-compatible) with SQLite as a zero-setup fallback.
+- **Next.js web UI** (React 19, TypeScript, Tailwind v4): a "Deep Field" interface —
+  near-black void, electric cyan and violet, real `backdrop-filter` glass, and an
+  aperture-and-iris mark drawn as SVG. A landing page with operator sign-in, a screening
+  workspace whose result panel updates in place (radial confidence gauge, animated
+  probability bars), a records table, and a report view. Runs anywhere a browser does —
+  no desktop toolkit, no per-machine Tcl/Tk or GUI dependencies to go wrong.
+- **FastAPI JSON backend** with session-cookie auth over the same scrypt password
+  hashes. The UI proxies `/api/*` to it, so the cookie stays same-origin and there's no
+  CORS setup or token storage to get wrong.
+- **AI chat assistant** (optional, via [Ollama](https://ollama.com)): ask questions about
+  a specific screening result in plain language. Deliberately scoped — the system prompt
+  fixes the actual grade/advice from the prediction and instructs the model never to
+  contradict the referral recommendation or answer unrelated medical questions. Runs
+  entirely on infrastructure you control (no data leaves your Ollama instance); if it
+  isn't running, the chat widget just doesn't appear — nothing else is affected.
+- **Full detailed reports, viewed in the browser**: every screening gets a complete
+  report — patient details, the fundus image, grade, full probability breakdown, referral
+  recommendation, this patient's screening history/trend, model provenance. A one-click
+  "Export as HTML" produces a portable, printable/emailable file for anyone who needs one.
+- **Recent Screenings** page — search, "referrals only" filter, CSV export, and
+  click-to-report, separate from the main screening workflow.
+- **MySQL or Postgres storage** with SQLite as a zero-setup fallback.
 - **SMS reports** via Twilio (free trial credit, card required at signup) or **Fast2SMS**
   (India — cheaper, but *not* free: their API refuses every request, even the first, until
   the account has a minimum ₹100 top-up). Without either configured, SMS runs in dry-run
   mode (printed to the log, nothing lost).
-- **In-app Settings**: change clinic name, referral threshold, default country code and
-  the SMS on/off switch without hand-editing `.env` — takes effect immediately.
-- **CSV export** (GUI button or `drscreen export-csv`) and **batch screening**
-  (`drscreen batch-screen`) for running a whole eye camp's folder of images against a
-  patient CSV in one pass.
+- **In-app Settings**: change clinic name, referral threshold, default country code, SMS
+  on/off, and the chat assistant's model/host — without hand-editing `.env`, takes effect
+  immediately (model/database changes still need a restart).
+- **CSV export** and **batch screening** (`drscreen batch-screen`) for running a whole eye
+  camp's folder of images against a patient CSV in one pass.
 - **Image-quality feedback the moment you pick a photo** (blur/exposure/resolution), not
   only after you've already waited for a prediction.
-- **Keyboard shortcuts**: `Ctrl/Cmd+O` choose image, `Ctrl/Cmd+Return` analyze,
-  `Ctrl/Cmd+R` view report, `Ctrl/Cmd+F` recent screenings, `Ctrl/Cmd+E` export, `Esc` back.
-- A referable result rings the system bell and pulses the banner — hard to miss even if
-  you looked away from the screen.
+- **Ships as a Compose stack** (UI + API + Ollama), portable to any Docker-capable host —
+  Render, Railway, Fly.io, a plain VPS, or your own server.
+
+## Architecture
+
+```
+                       ┌─────────────── drscreen web (:8000) ───────────────┐
+  browser  ──────────▶ │  frontend/out   static Next.js UI                  │
+                       │  /api/*         FastAPI JSON API                   │
+                       └───────────────────────┬───────────────────────────┘
+                                               ├─▶ ResNet-152 (PyTorch)
+                                               ├─▶ SQLite / MySQL / Postgres
+                                               ├─▶ Twilio / Fast2SMS
+                                               └─▶ Ollama (chat assistant)
+```
+
+The UI is a **static export** that FastAPI serves itself, so the whole app is one
+process on one port and Node is needed only to *build* the UI, never to run it. UI and
+API therefore share an origin, which keeps the httpOnly session cookie working with no
+CORS configuration. The same `ScreeningService` powers the API and every CLI command, so
+there is no duplicated business logic.
 
 ## Quick start
 
-The fastest path on any OS — one script handles the venv, dependencies, and `.env`:
+### Option A — Docker Compose (recommended for a real/cloud deployment)
+
+```bash
+cp .env.example .env               # clinic name, SMS credentials, DRS_SECRET_KEY
+docker compose up -d --build       # first boot also pulls the Ollama chat model
+open http://localhost:8000
+```
+
+Put your own reverse proxy (Caddy, nginx, or your host's built-in one) with a real TLS
+certificate in front of the `app` service for a public domain — see
+[docker-compose.yml](docker-compose.yml); it's deliberately not tied to one hosting
+provider. You'll still need model weights — see [models/README.md](models/README.md) —
+mounted at `./models/classifier.pt`.
+
+### Option B — one command, one port
+
+```bash
+./deploy.sh              # sets up Python + builds the UI, then serves both on :8000
+```
+
+Open <http://127.0.0.1:8000>. The first run builds the UI (needs Node 20+ once); after
+that `frontend/out` is reused and startup is instant. Without Node the API still runs —
+you just get the CLI rather than the interface.
+
+### Option C — UI development with hot reload
+
+```bash
+drscreen web                                   # API on :8000
+cd frontend && npm install && npm run dev      # UI on :3000, proxies /api to :8000
+```
+
+Point the proxy elsewhere with `DRS_API_ORIGIN=http://host:port npm run dev`. When
+you're done, `npm run build` refreshes the static export that `drscreen web` serves.
+
+### Option D — Windows / setup scripts
 
 **macOS / Linux** (or Windows via Git Bash / WSL):
 
 ```bash
-./deploy.sh              # set up, then launch the desktop GUI
+./deploy.sh              # set up, then launch the web app at http://127.0.0.1:8000
 ./deploy.sh doctor       # set up, then run any drscreen command instead
 ./deploy.sh setup        # just set up; don't run anything
 ```
@@ -105,19 +163,22 @@ shells, not from PowerShell.
 **Windows (native PowerShell)** — no Git Bash or WSL required:
 
 ```powershell
-.\deploy.ps1              # set up, then launch the desktop GUI
+.\deploy.ps1              # set up, then launch the web app at http://127.0.0.1:8000
 .\deploy.ps1 doctor       # set up, then run any drscreen command instead
 .\deploy.ps1 setup        # just set up; don't run anything
 ```
 
 If PowerShell refuses to run it ("running scripts is disabled on this system"), run once:
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, confirm, then re-run `.\deploy.ps1`.
+If it still refuses after a fresh download with "is not digitally signed", run
+`Unblock-File .\deploy.ps1` first — Windows tags browser/ZIP downloads with a marker that
+`RemoteSigned` treats as untrusted until it's removed.
 
 Either script finds a Python 3.10+ interpreter, creates `.venv` (recovering gracefully if pip
 wasn't bundled — e.g. a venv created by `uv`), installs the project, and copies
 `.env.example` → `.env` on first run.
 
-Or by hand:
+### Option E — by hand
 
 ```bash
 # 1. Install (Python 3.10+)
@@ -134,9 +195,9 @@ drscreen convert-weights ~/Downloads/classifier.pt models/classifier.pt --trust
 drscreen doctor
 
 # 5. Run
-drscreen gui                                             # desktop app
+drscreen web                                             # UI + API at http://127.0.0.1:8000
 drscreen predict sampleimages/                           # grade all sample images
-drscreen predict sampleimages/eye1.png --json            # one image, machine-readable
+drscreen predict sampleimages/eye1.png --json             # one image, machine-readable
 ```
 
 Example output of `drscreen predict` (illustrative values):
@@ -146,11 +207,24 @@ eye1.png                     REFER  grade 2  Moderate DR               87.3%
 eye4.jpg                            grade 0  No Diabetic Retinopathy   96.1%
 ```
 
+### Chat assistant setup (optional)
+
+The chat feature needs a separate [Ollama](https://ollama.com) process:
+
+```bash
+# native install: https://ollama.com/download, or `brew install ollama` on macOS
+ollama serve                     # in its own terminal, or as a system service
+ollama pull llama3.2:3b          # the default model (docker-compose.yml does this for you)
+```
+
+If Ollama isn't reachable, the chat widget simply doesn't appear — no error surfaces
+elsewhere in the app. Check reachability any time with `drscreen doctor`.
+
 ## Command reference
 
 | Command | Purpose |
 |---|---|
-| `drscreen gui` | Launch the desktop screening app |
+| `drscreen web [--host] [--port] [--reload]` | Launch the web application |
 | `drscreen predict IMG/DIR… [--json] [--no-tta]` | Grade one or more images or folders |
 | `drscreen train --csv train.csv --images train_images/` | Fine-tune on APTOS (see `--help` for hyper-parameters) |
 | `drscreen evaluate --csv … --images … [--sweep]` | Metrics on a labelled set, with an optional threshold sweep |
@@ -162,17 +236,17 @@ eye4.jpg                            grade 0  No Diabetic Retinopathy   96.1%
 | `drscreen export-csv --output FILE` | Export screening history as CSV |
 | `drscreen init-db` | Create database tables |
 | `drscreen convert-weights SRC DST --trust` | Convert the legacy `classifier.pt` to the safe format |
-| `drscreen doctor` | Check model, database and SMS configuration |
+| `drscreen doctor` | Check model, database, SMS and chat-assistant configuration |
 
 ## Configuration
 
 All settings come from environment variables or `.env`. See [.env.example](.env.example).
 
-### MySQL (HeidiSQL)
+### Database: MySQL, Postgres, or SQLite
 
-Run [sql/schema.mysql.sql](sql/schema.mysql.sql) as an admin user. In HeidiSQL, use
-*File → Load SQL file…* and then *Execute*. From a terminal, use
-`mysql -u root -p < sql/schema.mysql.sql`. Then create a least-privilege app account:
+For MySQL (HeidiSQL-compatible), run [sql/schema.mysql.sql](sql/schema.mysql.sql) as an
+admin user. In HeidiSQL, use *File → Load SQL file…* and then *Execute*. From a terminal,
+use `mysql -u root -p < sql/schema.mysql.sql`. Then create a least-privilege app account:
 
 ```sql
 CREATE USER 'drscreen'@'localhost' IDENTIFIED BY 'change-me';
@@ -183,13 +257,21 @@ GRANT SELECT, INSERT, UPDATE ON drscreen.* TO 'drscreen'@'localhost';
 DRS_DATABASE_URL=mysql+pymysql://drscreen:change-me@localhost:3306/drscreen?charset=utf8mb4
 ```
 
-Leave `DRS_DATABASE_URL` unset to use a local SQLite file (`data/drscreen.db`).
+For Postgres (install the extra with `pip install -e ".[postgres]"`):
+
+```ini
+DRS_DATABASE_URL=postgresql+psycopg://drscreen:change-me@localhost:5432/drscreen
+```
+
+Leave `DRS_DATABASE_URL` unset to use a local SQLite file (`data/drscreen.db`) — fine for
+a single-machine deployment, not recommended for several concurrent operators sharing one
+cloud instance.
 
 ### SMS
 
 `build_sender()` picks the first of these that's configured: **Twilio**, then
 **Fast2SMS**, then dry-run (prints the message instead of sending). Both can also be
-set from the app's Settings screen (clinic name, threshold, country code, on/off) —
+set from the app's Settings page (clinic name, threshold, country code, on/off) —
 API credentials still go in `.env`.
 
 Neither provider is actually free — a real SMS costs a telecom operator money to
@@ -227,6 +309,22 @@ Referable DR. Consult an ophthalmologist within 3 months.
 AI-assisted screening, not a diagnosis.
 ```
 
+### Chat assistant (Ollama)
+
+`OLLAMA_HOST` (default `http://localhost:11434`) and `OLLAMA_MODEL` (default
+`llama3.2:3b`) — see [drscreen/chat.py](src/drscreen/chat.py) for the exact system prompt
+and guardrails. Any Ollama-compatible model works; a smaller model (e.g. `phi3:mini`)
+trades explanation quality for lower CPU/memory use on a cheap cloud instance.
+
+### Web app session security
+
+`DRS_SECRET_KEY` signs session cookies. Auto-generated if left blank (fine for local use
+— every restart forces re-login); set it explicitly for any real deployment:
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
 ## Training
 
 ```bash
@@ -252,7 +350,9 @@ file next to it records every epoch.
 See **[docs/MODEL_CARD.md](docs/MODEL_CARD.md)**. It includes an analysis of why the
 original "97% accuracy" claim can't be trusted as-is (a validation-leakage problem and a
 BGR/RGB mismatch between training and serving), and how to measure performance
-properly. **This software is a screening aid, not a diagnostic device.**
+properly. **This software is a screening aid, not a diagnostic device.** The chat
+assistant is an explanation aid on top of that same screening result — not a second
+opinion, and it's explicitly instructed never to contradict the referral recommendation.
 
 ## Engineering notes: what changed from v1
 
@@ -264,10 +364,10 @@ properly. **This software is a screening aid, not a diagnostic device.**
 | SQL | String-formatted queries (SQL injection) | SQLAlchemy parameterised queries, UNIQUE constraints, short transactions |
 | Secrets | DB password hard-coded in source | `.env` / environment variables |
 | Checkpoints | Full pickled module (arbitrary-code risk) | `weights_only` loading; explicit `convert-weights --trust` for old files |
-| GUI | Froze during inference; opened a blocking matplotlib window | Background worker thread, integrated result card and history |
+| Interface | Desktop Tkinter GUI, froze during inference | Next.js UI + FastAPI JSON API, deployable to the cloud |
 | Validation | Unseeded split, reshuffled on every resume | Seeded stratified split, QWK, referral sensitivity |
-| Packaging | Pinned, mutually incompatible versions (`torchvision==0.3` with `torch==1.13`) | `pyproject.toml`, installable CLI, CUDA/MPS/CPU auto-select |
-| Tests | None | 43 pytest tests covering model I/O, inference, metrics, training, DB, auth, SMS and CLI |
+| Packaging | Pinned, mutually incompatible versions (`torchvision==0.3` with `torch==1.13`) | `pyproject.toml`, installable CLI, CUDA/MPS/CPU auto-select, Docker image |
+| Tests | None | 73 pytest tests covering model I/O, inference, metrics, training, DB, auth, SMS, reporting and CLI |
 
 ## Project layout
 
@@ -280,39 +380,54 @@ src/drscreen/
   data.py           APTOS dataset, stratified split, class weights
   training.py       training loop
   metrics.py        QWK, confusion matrix, referral sensitivity/specificity
-  storage.py        SQLAlchemy models + repository (MySQL / SQLite)
+  storage.py        SQLAlchemy models + repository (MySQL / Postgres / SQLite)
   security.py       password hashing
-  notify.py         Twilio SMS + dry-run sender, phone normalisation
+  notify.py         Twilio/Fast2SMS SMS senders + dry-run, phone normalisation
   reporting.py      self-contained HTML clinical report generator
-  service.py        screening workflow shared by GUI and CLI
+  chat.py           scoped Ollama chat assistant (explains one result)
+  service.py        screening workflow shared by the web app and CLI
+  theme.py          "Emerald & Ivory" palette, derived from 2 brand colours
+  branding.py       the rendered logo (favicon, report header)
   cli.py            `drscreen` command
-  gui/
-    theme.py          "Emerald & Ivory" palette, derived from 2 brand colours
-    branding.py       the rendered logo (window icon, report header)
-    canvas_widgets.py responsive/animated widgets (buttons, bars, scroll, background)
-    app.py            the Tkinter application (landing/login, dashboard, native
-                      report view, settings view)
+  theme.py          brand tokens for Python-rendered output (logo, report)
+  branding.py       the DRSCREEN mark, rendered with PIL
+  web/
+    app.py            FastAPI application factory
+    auth.py           signed-cookie session auth
+    routes/api.py     the whole JSON API
+frontend/           Next.js UI (React 19, TypeScript, Tailwind v4)
+  out/                static export, served by FastAPI (git-ignored; npm run build)
+  src/app/            landing+login, dashboard, history, report, settings
+  src/components/     Logo, AppShell, Chat, ui primitives
+  src/lib/api.ts      typed client for the JSON API
 tests/              pytest suite (run: pytest)
 notebooks/          original Kaggle training/inference notebooks
 legacy/             original v1 scripts, kept for reference
 sql/                MySQL schema
 docs/MODEL_CARD.md  intended use, metrics, limitations
+Dockerfile, docker-compose.yml   app + Ollama, portable to any Docker host
 ```
 
 ## Development
 
 ```bash
+# backend
 pip install -e ".[all]"
-pytest            # full suite, about 15 s on CPU (uses a small ResNet-18 for speed)
+pytest                       # full suite, ~15 s on CPU (uses a small ResNet-18)
 ruff check src tests
+
+# frontend
+cd frontend
+npm install
+npm run dev                  # http://localhost:3000, proxies /api to :8000
+npm run lint && npx tsc --noEmit
 ```
 
 ## Roadmap
 
-- Web deployment (FastAPI + the same `ScreeningService`) with a lightweight backbone
-  (EfficientNet-B0 / MobileNetV3) or ONNX export for CPU clinics.
 - Grad-CAM heat-maps so clinicians can see which lesions drove a prediction.
 - A proper ungradable-image detector, and probability calibration (temperature scaling).
+- A lighter backbone (EfficientNet-B0 / MobileNetV3) or ONNX export for CPU-only clinics.
 - Privacy-preserving training across hospitals: Federated Learning, Differential
   Privacy, Secure Multi-Party Computation.
 - External validation on Messidor-2 / IDRiD.

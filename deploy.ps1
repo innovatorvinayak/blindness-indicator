@@ -5,11 +5,11 @@
 # drscreen  -  using only PowerShell, so no extra tooling is required.
 #
 # Usage (run from PowerShell, in this folder):
-#   .\deploy.ps1                    # set up the environment, then launch the GUI
+#   .\deploy.ps1                    # set up the environment, then launch the web app
 #   .\deploy.ps1 setup               # only set up the environment, don't run anything
 #   .\deploy.ps1 doctor               # set up, then run `drscreen doctor`
 #   .\deploy.ps1 predict img.png       # set up, then forward args to `drscreen`
-#   .\deploy.ps1 -SkipSetup gui         # skip the setup check (fast path, once installed)
+#   .\deploy.ps1 -SkipSetup web         # skip the setup check (fast path, once installed)
 #
 # If PowerShell refuses to run this script ("running scripts is disabled on this
 # system"), run once: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
@@ -110,10 +110,34 @@ if (-not (Test-Path $EnvFile) -and (Test-Path $EnvExample)) {
     WarnMsg "Created .env from .env.example. Edit it to set your clinic name, SMS provider credentials, etc.  -  see README.md."
 }
 
+# -- web UI: build the static export once, then reuse it -------------------------------
+# `drscreen web` serves frontend\out itself, so the UI needs Node only at
+# build time - never at runtime.
+$UiDir = Join-Path $ScriptDir "frontend"
+$UiOut = Join-Path $UiDir "out"
+if ((-not $SkipSetup) -and (-not (Test-Path $UiOut))) {
+    if (Get-Command npm -ErrorAction SilentlyContinue) {
+        Info "Building the web UI (first run only; a few minutes) ..."
+        Push-Location $UiDir
+        if (-not (Test-Path (Join-Path $UiDir "node_modules"))) {
+            npm install --no-audit --no-fund
+        }
+        npm run build
+        Pop-Location
+        if (Test-Path $UiOut) {
+            Ok "Web UI built."
+        } else {
+            WarnMsg "UI build failed - the API will still start, but there'll be no interface. Fix it with: cd frontend; npm install; npm run build"
+        }
+    } else {
+        WarnMsg "Node.js/npm not found, so the web UI can't be built. Install Node 20+ from https://nodejs.org and re-run, or use the CLI commands (predict, batch-screen)."
+    }
+}
+
 # -- model weights: warn, don't fail (some commands don't need them) -------------------
 $ModelFile = Join-Path $ScriptDir "models\classifier.pt"
 if (-not (Test-Path $ModelFile)) {
-    WarnMsg "models\classifier.pt not found  -  'predict'/'gui'/'evaluate' need it. See models\README.md to download or train one."
+    WarnMsg "models\classifier.pt not found  -  'predict'/'web'/'evaluate' need it. See models\README.md to download or train one."
 }
 
 Ok "Setup complete."
@@ -124,8 +148,8 @@ if ($Args_.Count -eq 1 -and $Args_[0] -eq "setup") {
     # do the environment setup above, then stop.
     exit 0
 } elseif ($Args_.Count -eq 0) {
-    Info "No command given  -  launching the desktop GUI (drscreen gui)."
-    & $VenvDrscreen gui
+    Info "No command given - launching the web app (drscreen web) at http://127.0.0.1:8000"
+    & $VenvDrscreen web
 } else {
     Info "Running: drscreen $($Args_ -join ' ')"
     & $VenvDrscreen @Args_

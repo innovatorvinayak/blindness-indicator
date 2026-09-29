@@ -11,11 +11,11 @@
 # command name, and line-ending/path quirks accordingly.
 #
 # Usage:
-#   ./deploy.sh                 # set up the environment, then launch the GUI
+#   ./deploy.sh                 # set up the environment, then launch the web app
 #   ./deploy.sh setup           # only set up the environment, don't run anything
 #   ./deploy.sh doctor          # set up, then run `drscreen doctor`
 #   ./deploy.sh predict img.png # set up, then forward args to `drscreen`
-#   ./deploy.sh --skip-setup gui  # skip the setup check (fast path, once installed)
+#   ./deploy.sh --skip-setup web  # skip the setup check (fast path, once installed)
 #
 # Anything after the recognised flags is forwarded verbatim to `drscreen`,
 # so every CLI command documented in README.md works through this script too.
@@ -147,9 +147,28 @@ if [ ! -f "$SCRIPT_DIR/.env" ] && [ -f "$SCRIPT_DIR/.env.example" ]; then
        "provider credentials, etc. — see README.md."
 fi
 
+# -- web UI: build the static export once, then reuse it -------------------------------
+# `drscreen web` serves frontend/out itself, so the UI needs Node only at
+# build time — never at runtime.
+UI_DIR="$SCRIPT_DIR/frontend"
+if [ "$SKIP_SETUP" -eq 0 ] && [ ! -d "$UI_DIR/out" ]; then
+  if command -v npm >/dev/null 2>&1; then
+    info "Building the web UI (first run only; a few minutes) ..."
+    ( cd "$UI_DIR" \
+      && { [ -d node_modules ] || npm install --no-audit --no-fund; } \
+      && npm run build ) \
+      || warn "UI build failed — the API will still start, but there'll be no interface." \
+              "Fix it with: cd frontend && npm install && npm run build"
+    [ -d "$UI_DIR/out" ] && ok "Web UI built."
+  else
+    warn "Node.js/npm not found, so the web UI can't be built. Install Node 20+ from" \
+         "https://nodejs.org and re-run, or use the CLI commands (predict, batch-screen)."
+  fi
+fi
+
 # -- model weights: warn, don't fail (some commands don't need them) -------------------
 if [ ! -f "$SCRIPT_DIR/models/classifier.pt" ]; then
-  warn "models/classifier.pt not found — 'predict'/'gui'/'evaluate' need it." \
+  warn "models/classifier.pt not found — 'predict'/'web'/'evaluate' need it." \
        "See models/README.md to download or train one."
 fi
 
@@ -162,8 +181,8 @@ if [ "${#ARGS[@]}" -eq 1 ] && [ "${ARGS[0]}" = "setup" ]; then
   # the CLI doesn't recognise and erroring out.
   exit 0
 elif [ "${#ARGS[@]}" -eq 0 ]; then
-  info "No command given — launching the desktop GUI (drscreen gui)."
-  exec "$VENV_BIN/drscreen" gui
+  info "No command given — launching the web app (drscreen web) at http://127.0.0.1:8000"
+  exec "$VENV_BIN/drscreen" web
 else
   info "Running: drscreen ${ARGS[*]}"
   exec "$VENV_BIN/drscreen" "${ARGS[@]}"

@@ -15,17 +15,18 @@ dependencies = [
     "pillow>=10.0",
     "sqlalchemy>=2.0",
     "python-dotenv>=1.0",
-    # For the GUI's scrollable views: a mature, widely-deployed Tkinter
-    # extension whose mousewheel/trackpad handling has been battle-tested
-    # across real macOS/Windows/Linux use, rather than a from-scratch one.
-    "customtkinter>=5.2",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",  # required by FastAPI for form/file uploads
+    "itsdangerous>=2.2",         # signs the API's session cookies
 ]
 
 [project.optional-dependencies]
 mysql = ["pymysql>=1.1"]
+postgres = ["psycopg[binary]>=3.1"]
 sms = ["twilio>=9.0"]
-dev = ["pytest>=8.0", "ruff>=0.5"]
-all = ["drscreen[mysql,sms,dev]"]
+dev = ["pytest>=8.0", "ruff>=0.5", "httpx>=0.27"]
+all = ["drscreen[mysql,postgres,sms,dev]"]
 
 [project.scripts]
 drscreen = "drscreen.cli:main"
