@@ -134,10 +134,39 @@ if ((-not $SkipSetup) -and (-not (Test-Path $UiOut))) {
     }
 }
 
+# -- database: create the file/schema so first run isn't an empty-table error ----------
+# The default is a SQLite file under data\, which needs no server and no
+# credentials, so a fresh machine has a working database with no setup. Point
+# DRS_DATABASE_URL at MySQL/Postgres in .env to use one instead.
+if (-not $SkipSetup) {
+    New-Item -ItemType Directory -Force -Path (Join-Path $ScriptDir "data") | Out-Null
+    & $VenvDrscreen init-db 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Ok "Database ready."
+    } else {
+        WarnMsg "Could not initialise the database. Check DRS_DATABASE_URL in .env; run 'drscreen init-db' to see the error."
+    }
+}
+
 # -- model weights: warn, don't fail (some commands don't need them) -------------------
+# Not in git: it's a ~240 MB binary. Set DRS_MODEL_URL in .env (or the
+# environment) to a direct download and this fetches it automatically.
 $ModelFile = Join-Path $ScriptDir "models\classifier.pt"
+if ((-not (Test-Path $ModelFile)) -and $env:DRS_MODEL_URL) {
+    Info "Downloading model weights from DRS_MODEL_URL ..."
+    New-Item -ItemType Directory -Force -Path (Join-Path $ScriptDir "models") | Out-Null
+    try {
+        Invoke-WebRequest -Uri $env:DRS_MODEL_URL -OutFile "$ModelFile.part" -UseBasicParsing
+        Move-Item "$ModelFile.part" $ModelFile -Force
+        Ok "Model weights downloaded."
+    } catch {
+        Remove-Item "$ModelFile.part" -ErrorAction SilentlyContinue
+        WarnMsg "Download failed - see models\README.md."
+    }
+}
+
 if (-not (Test-Path $ModelFile)) {
-    WarnMsg "models\classifier.pt not found  -  'predict'/'web'/'evaluate' need it. See models\README.md to download or train one."
+    WarnMsg "models\classifier.pt not found. The app will still start, but screening stays disabled until it's there. Copy the file into models\, set DRS_MODEL_URL in .env, or see models\README.md."
 }
 
 Ok "Setup complete."
@@ -148,7 +177,11 @@ if ($Args_.Count -eq 1 -and $Args_[0] -eq "setup") {
     # do the environment setup above, then stop.
     exit 0
 } elseif ($Args_.Count -eq 0) {
-    Info "No command given - launching the web app (drscreen web) at http://127.0.0.1:8000"
+    Write-Host ""
+    Write-Host "  Open http://127.0.0.1:8000" -ForegroundColor Green
+    Write-Host "  First time? Create your operator account from the sign-in page."
+    Write-Host "  Stop the server with Ctrl+C."
+    Write-Host ""
     & $VenvDrscreen web
 } else {
     Info "Running: drscreen $($Args_ -join ' ')"

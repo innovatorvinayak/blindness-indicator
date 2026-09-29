@@ -100,6 +100,13 @@ class Settings:
     # explicitly for any real deployment so sessions survive a restart and
     # can't be forged by guessing a freshly-generated key.
     secret_key: str = field(default_factory=lambda: secrets.token_hex(32))
+    # Whether operators can create their own accounts from the sign-in page.
+    # Convenient for a single-clinic deployment; for anything reachable from
+    # the public internet, either set DRS_SIGNUP_CODE so staff need a shared
+    # code, or turn signup off entirely and use `drscreen add-user` -- an
+    # operator account can read every patient record.
+    allow_signup: bool = True
+    signup_code: str = ""
 
     @classmethod
     def from_env(cls, env_file: str | os.PathLike | None = None) -> Settings:
@@ -143,6 +150,8 @@ class Settings:
                 enabled=_env_bool("OLLAMA_ENABLED", defaults.ollama.enabled),
             ),
             secret_key=_env("DRS_SECRET_KEY", defaults.secret_key),
+            allow_signup=_env_bool("DRS_ALLOW_SIGNUP", defaults.allow_signup),
+            signup_code=_env("DRS_SIGNUP_CODE", defaults.signup_code),
         )
 
 

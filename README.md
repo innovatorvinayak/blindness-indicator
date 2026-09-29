@@ -316,6 +316,26 @@ AI-assisted screening, not a diagnosis.
 and guardrails. Any Ollama-compatible model works; a smaller model (e.g. `phi3:mini`)
 trades explanation quality for lower CPU/memory use on a cheap cloud instance.
 
+### Who can create an account
+
+Operators can register themselves from the sign-in page by default, which is
+convenient for a single clinic. An operator account can read **every** patient
+record, so for anything reachable from the internet, gate it:
+
+```ini
+DRS_ALLOW_SIGNUP=true
+DRS_SIGNUP_CODE=CLINIC-2026     # staff must know this code to register
+```
+
+or close it entirely and create accounts from the server:
+
+```ini
+DRS_ALLOW_SIGNUP=false
+```
+```bash
+drscreen add-user asha
+```
+
 ### Web app session security
 
 `DRS_SECRET_KEY` signs session cookies. Auto-generated if left blank (fine for local use

@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, ApiError, GRADE_SHORT, gradeInk } from "@/lib/api";
 
 const SHOWCASE = [
@@ -56,11 +57,23 @@ export default function LandingPage() {
   const [clinic, setClinic] = useState<string | null>(null);
   const [shot, setShot] = useState(0);
 
+  // Sign-up state, kept separate so switching tabs doesn't carry a failed
+  // sign-in's credentials into the registration form.
+  const [mode, setMode] = useState("signin");
+  const [newUser, setNewUser] = useState("");
+  const [newPass, setNewPass] = useState("");
+  const [confirmPass, setConfirmPass] = useState("");
+  const [signupCode, setSignupCode] = useState("");
+  const [signupEnabled, setSignupEnabled] = useState(false);
+  const [needsCode, setNeedsCode] = useState(false);
+
   useEffect(() => {
     api
       .status()
       .then((s) => {
         setClinic(s.clinic_name);
+        setSignupEnabled(s.signup_enabled);
+        setNeedsCode(s.signup_requires_code);
         if (s.operator) router.replace("/dashboard");
       })
       .catch(() => {});
@@ -82,6 +95,28 @@ export default function LandingPage() {
       setError(err instanceof ApiError ? err.message : "Could not sign in.");
       setBusy(false);
     }
+  }
+
+  async function register(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPass !== confirmPass) {
+      setError("The two passwords don't match.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await api.signup(newUser, newPass, signupCode);
+      router.replace("/dashboard");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not create the account.");
+      setBusy(false);
+    }
+  }
+
+  function switchMode(next: string) {
+    setMode(next);
+    setError(null);
   }
 
   const current = SHOWCASE[shot];
@@ -137,40 +172,91 @@ export default function LandingPage() {
           <section className="rise" style={{ animationDelay: "120ms" }}>
             <Card className={`shadow-xl shadow-indigo-500/5 ${error ? "shake" : ""}`}>
               <CardContent className="pt-6">
-                <h2 className="text-lg font-semibold tracking-tight">Operator sign-in</h2>
-                <p className="mt-1 text-[13px] text-slate-500">
-                  Restricted to registered screening staff.
-                </p>
+                <Tabs value={mode} onValueChange={switchMode}>
+                  {signupEnabled && (
+                    <TabsList className="mb-5 grid w-full grid-cols-2">
+                      <TabsTrigger value="signin">Sign in</TabsTrigger>
+                      <TabsTrigger value="signup">Create account</TabsTrigger>
+                    </TabsList>
+                  )}
 
-                {error && (
-                  <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-[13px] text-rose-700">
-                    {error}
-                  </div>
-                )}
+                  {error && (
+                    <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-[13px] text-rose-700">
+                      {error}
+                    </div>
+                  )}
 
-                <form onSubmit={submit} className="mt-5 space-y-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="u">Username</Label>
-                    <Input id="u" autoComplete="username" required autoFocus
-                           value={username} onChange={(e) => setUsername(e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="p">Password</Label>
-                    <Input id="p" type="password" autoComplete="current-password" required
-                           value={password} onChange={(e) => setPassword(e.target.value)} />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={busy}>
-                    {busy ? "Verifying…" : "Sign in"}
-                  </Button>
-                </form>
+                  <TabsContent value="signin" className="mt-0">
+                    <h2 className="text-lg font-semibold tracking-tight">Operator sign-in</h2>
+                    <p className="mt-1 text-[13px] text-slate-500">
+                      Restricted to registered screening staff.
+                    </p>
+                    <form onSubmit={submit} className="mt-5 space-y-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="u">Username</Label>
+                        <Input id="u" autoComplete="username" required
+                               value={username} onChange={(e) => setUsername(e.target.value)} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="p">Password</Label>
+                        <Input id="p" type="password" autoComplete="current-password" required
+                               value={password} onChange={(e) => setPassword(e.target.value)} />
+                      </div>
+                      <Button type="submit" className="w-full" disabled={busy}>
+                        {busy ? "Verifying…" : "Sign in"}
+                      </Button>
+                    </form>
+                    {!signupEnabled && (
+                      <p className="mt-5 border-t pt-4 text-[11.5px] text-slate-500">
+                        No account yet? An administrator creates one with{" "}
+                        <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10.5px] text-indigo-700">
+                          drscreen add-user
+                        </code>{" "}
+                        on the server.
+                      </p>
+                    )}
+                  </TabsContent>
 
-                <p className="mt-5 border-t pt-4 text-[11.5px] text-slate-500">
-                  No account yet? An administrator creates one with{" "}
-                  <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10.5px] text-indigo-700">
-                    drscreen add-user
-                  </code>{" "}
-                  on the server.
-                </p>
+                  <TabsContent value="signup" className="mt-0">
+                    <h2 className="text-lg font-semibold tracking-tight">Create an operator account</h2>
+                    <p className="mt-1 text-[13px] text-slate-500">
+                      Operator accounts can read every patient record.
+                    </p>
+                    <form onSubmit={register} className="mt-5 space-y-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="nu">Username</Label>
+                        <Input id="nu" autoComplete="username" required minLength={3}
+                               value={newUser} onChange={(e) => setNewUser(e.target.value)} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="np">Password</Label>
+                        <Input id="np" type="password" autoComplete="new-password" required
+                               minLength={8} value={newPass}
+                               onChange={(e) => setNewPass(e.target.value)} />
+                        <p className="text-[11px] text-slate-500">At least 8 characters.</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="cp">Confirm password</Label>
+                        <Input id="cp" type="password" autoComplete="new-password" required
+                               value={confirmPass}
+                               onChange={(e) => setConfirmPass(e.target.value)} />
+                      </div>
+                      {needsCode && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="sc">Sign-up code</Label>
+                          <Input id="sc" required value={signupCode}
+                                 onChange={(e) => setSignupCode(e.target.value)} />
+                          <p className="text-[11px] text-slate-500">
+                            Ask your clinic administrator for this code.
+                          </p>
+                        </div>
+                      )}
+                      <Button type="submit" className="w-full" disabled={busy}>
+                        {busy ? "Creating…" : "Create account & sign in"}
+                      </Button>
+                    </form>
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
           </section>

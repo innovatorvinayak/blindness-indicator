@@ -23,7 +23,8 @@ from drscreen.config import Settings, update_env
 from drscreen.grading import Grade
 from drscreen.preprocessing import assess_quality, load_image
 from drscreen.retina import check_fundus
-from drscreen.storage import OperatorInfo, PatientInfo
+from drscreen.security import MIN_PASSWORD_LENGTH
+from drscreen.storage import DuplicateUsernameError, OperatorInfo, PatientInfo
 from drscreen.web.auth import COOKIE_NAME, MAX_AGE_SECONDS, current_operator, encode_session
 
 log = logging.getLogger(__name__)
@@ -61,6 +62,47 @@ def login(request: Request, body: LoginBody) -> JSONResponse:
     return response
 
 
+class SignupBody(BaseModel):
+    username: str
+    password: str
+    code: str = ""
+
+
+@router.post("/signup")
+def signup(request: Request, body: SignupBody) -> JSONResponse:
+    """Create an operator account and sign them straight in.
+
+    Gated by settings because an operator can read every patient record:
+    signup can be turned off entirely, or put behind a shared code.
+    """
+    settings: Settings = request.app.state.settings
+    if not settings.allow_signup:
+        raise HTTPException(
+            403, "Self sign-up is disabled. Ask an administrator to create your account.")
+    if settings.signup_code and body.code.strip() != settings.signup_code:
+        raise HTTPException(403, "That sign-up code isn't right.")
+
+    username = body.username.strip()
+    if len(username) < 3:
+        raise HTTPException(400, "Username must be at least 3 characters.")
+    if len(body.password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(
+            400, f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
+
+    try:
+        operator = request.app.state.db.create_operator(username, body.password)
+    except DuplicateUsernameError:
+        raise HTTPException(409, f"The username {username!r} is already taken.") from None
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+    token = encode_session(request.app.state.serializer, operator)
+    response = JSONResponse({"id": operator.id, "username": operator.username})
+    response.set_cookie(COOKIE_NAME, token, httponly=True, samesite="lax",
+                        max_age=MAX_AGE_SECONDS, path="/")
+    return response
+
+
 @router.post("/logout")
 def logout() -> JSONResponse:
     response = JSONResponse({"ok": True})
@@ -88,6 +130,8 @@ def status(request: Request) -> dict:
         "model_path": str(settings.model_path),
         "chat_available": chat.is_reachable(settings.ollama),
         "referral_threshold": settings.referral_threshold,
+        "signup_enabled": settings.allow_signup,
+        "signup_requires_code": bool(settings.signup_code),
     }
 
 

@@ -16,6 +16,8 @@ export type Status = {
   model_path: string;
   chat_available: boolean;
   referral_threshold: number;
+  signup_enabled: boolean;
+  signup_requires_code: boolean;
 };
 
 export type ScreeningRow = {
@@ -204,6 +206,8 @@ export const api = {
   me: () => request<Operator>("/api/me"),
   login: (username: string, password: string) =>
     request<Operator>("/api/login", json("POST", { username, password })),
+  signup: (username: string, password: string, code: string) =>
+    request<Operator>("/api/signup", json("POST", { username, password, code })),
   logout: () => request<{ ok: true }>("/api/logout", { method: "POST" }),
 
   qualityCheck: (file: File) => {

@@ -166,10 +166,41 @@ if [ "$SKIP_SETUP" -eq 0 ] && [ ! -d "$UI_DIR/out" ]; then
   fi
 fi
 
+# -- database: create the file/schema so first run isn't an empty-table error ----------
+# The default is a SQLite file under data/, which needs no server and no
+# credentials, so a fresh machine has a working database with no setup. Point
+# DRS_DATABASE_URL at MySQL/Postgres in .env to use one instead — the schema
+# command is the same either way.
+if [ "$SKIP_SETUP" -eq 0 ]; then
+  mkdir -p "$SCRIPT_DIR/data"
+  if "$VENV_BIN/drscreen" init-db >/dev/null 2>&1; then
+    ok "Database ready."
+  else
+    warn "Could not initialise the database. Check DRS_DATABASE_URL in .env;" \
+         "run '$VENV_BIN/drscreen init-db' to see the error."
+  fi
+fi
+
 # -- model weights: warn, don't fail (some commands don't need them) -------------------
-if [ ! -f "$SCRIPT_DIR/models/classifier.pt" ]; then
-  warn "models/classifier.pt not found — 'predict'/'web'/'evaluate' need it." \
-       "See models/README.md to download or train one."
+# Not in git: it's a ~240 MB binary. Set DRS_MODEL_URL in .env (or the
+# environment) to a direct download and this fetches it automatically.
+MODEL_FILE="$SCRIPT_DIR/models/classifier.pt"
+if [ ! -f "$MODEL_FILE" ] && [ -n "${DRS_MODEL_URL:-}" ]; then
+  info "Downloading model weights from DRS_MODEL_URL ..."
+  mkdir -p "$SCRIPT_DIR/models"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fL --progress-bar "$DRS_MODEL_URL" -o "$MODEL_FILE.part" && mv "$MODEL_FILE.part" "$MODEL_FILE"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q --show-progress "$DRS_MODEL_URL" -O "$MODEL_FILE.part" && mv "$MODEL_FILE.part" "$MODEL_FILE"
+  fi
+  [ -f "$MODEL_FILE" ] && ok "Model weights downloaded." || \
+    { rm -f "$MODEL_FILE.part"; warn "Download failed — see models/README.md."; }
+fi
+
+if [ ! -f "$MODEL_FILE" ]; then
+  warn "models/classifier.pt not found. The app will still start, but screening" \
+       "stays disabled until it's there. Either copy the file into models/, set" \
+       "DRS_MODEL_URL in .env to a direct download, or see models/README.md."
 fi
 
 ok "Setup complete."
@@ -181,7 +212,9 @@ if [ "${#ARGS[@]}" -eq 1 ] && [ "${ARGS[0]}" = "setup" ]; then
   # the CLI doesn't recognise and erroring out.
   exit 0
 elif [ "${#ARGS[@]}" -eq 0 ]; then
-  info "No command given — launching the web app (drscreen web) at http://127.0.0.1:8000"
+  printf '\n%s  Open %shttp://127.0.0.1:8000%s\n' "$C_GREEN▶$C_RESET" "$C_BOLD" "$C_RESET"
+  printf '   First time? Create your operator account from the sign-in page.\n'
+  printf '   Stop the server with Ctrl+C.\n\n'
   exec "$VENV_BIN/drscreen" web
 else
   info "Running: drscreen ${ARGS[*]}"
