@@ -83,9 +83,17 @@ function ReportRoute() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+  className = "",
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader>
         <CardTitle className="text-[12px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
           {title}
@@ -140,14 +148,14 @@ function Report({ detail, status }: { detail: ScreeningDetail; status: Status | 
         </CardContent>
       </Card>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+      <div className="print-2col grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <div className="space-y-5">
           <Section title="Fundus image">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={`/api/screenings/${detail.id}/image`}
               alt="Fundus photograph"
-              className="w-full rounded-lg border"
+              className="print-fundus w-full rounded-lg border"
             />
             <p className="mt-2.5 break-all font-mono text-[10.5px] text-muted-foreground">
               SHA-256 {detail.image_sha256 ?? "—"}
@@ -270,7 +278,7 @@ function Report({ detail, status }: { detail: ScreeningDetail; status: Status | 
       )}
 
       {status?.chat_available && (
-        <Section title="Explain this result">
+        <Section title="Explain this result" className="print-hide">
           <Chat screeningId={detail.id} />
         </Section>
       )}

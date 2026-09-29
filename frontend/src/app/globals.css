@@ -256,3 +256,63 @@
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ── print / export-to-PDF ──────────────────────────────────────
+   A printed report is a clinical document, so everything that only
+   makes sense on screen comes out: navigation, buttons, and the
+   chat box (an input is meaningless on paper). The disclaimer
+   stays — that belongs in an exported medical report. */
+@media print {
+  /* Only the sidebar itself — NOT [data-slot="sidebar-wrapper"], which is
+     the outer container holding the main content too. */
+  [data-slot="sidebar-container"],
+  [data-slot="sidebar-gap"],
+  [data-slot="sidebar"] {
+    display: none !important;
+  }
+
+  .print-hide {
+    display: none !important;
+  }
+
+  /* Flatten the app chrome so the report starts at the top of page 1. */
+  main {
+    padding: 0 !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  /* Cards become plain bordered blocks; shadows and fills waste ink. */
+  [data-slot="card"] {
+    box-shadow: none !important;
+    border-color: #cbd5e1 !important;
+    break-inside: avoid;
+  }
+
+  /* Keep the fundus image and its readings on the same sheet, and stop the
+     photograph eating a whole page on its own. */
+  img {
+    break-inside: avoid;
+  }
+
+  .print-fundus {
+    max-height: 78mm;
+    width: auto;
+    margin-inline: auto;
+  }
+
+  /* A4 is wide enough for the two-column report layout, but it sits below
+     Tailwind's `lg` breakpoint, so the columns would otherwise stack. */
+  .print-2col {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6mm !important;
+    align-items: start;
+  }
+
+  @page {
+    margin: 14mm;
+  }
+}
