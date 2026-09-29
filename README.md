@@ -124,15 +124,41 @@ certificate in front of the `app` service for a public domain — see
 provider. You'll still need model weights — see [models/README.md](models/README.md) —
 mounted at `./models/classifier.pt`.
 
-### Option B — one command, one port
+### Option B — one command (macOS, Linux, Windows)
 
 ```bash
-./deploy.sh              # sets up Python + builds the UI, then serves both on :8000
+./deploy.sh              # macOS / Linux, or Windows via Git Bash / WSL
+.\deploy.ps1             # Windows PowerShell — no Git Bash needed
 ```
 
-Open <http://127.0.0.1:8000>. The first run builds the UI (needs Node 20+ once); after
-that `frontend/out` is reused and startup is instant. Without Node the API still runs —
-you just get the CLI rather than the interface.
+That single command does the whole setup on a fresh machine: finds Python 3.10+,
+creates `.venv`, installs dependencies, builds the web UI, creates `.env`, creates the
+database, and starts the app on <http://127.0.0.1:8000>. Then **create your operator
+account from the sign-in page** — no command line needed.
+
+Re-runs are fast: the venv, `frontend/out` and database are reused.
+
+Prerequisites it can't install for you (it tells you if either is missing):
+
+| Needed | For | If absent |
+|---|---|---|
+| Python 3.10+ | everything | the script stops and links python.org |
+| Node 20+ | building the UI **once** | API and CLI still work; no web interface |
+
+**Model weights** (~240 MB) aren't in git. Either drop `classifier.pt` into `models/`,
+or set a direct download URL and the script fetches it automatically:
+
+```ini
+DRS_MODEL_URL=https://example.com/classifier.pt    # in .env
+```
+
+Without weights the app still starts and you can sign in — screening stays disabled
+behind a clear banner until the file is there.
+
+**The database needs no setup.** The default is a SQLite file at `data/drscreen.db`,
+created for you. To use MySQL or Postgres instead, set `DRS_DATABASE_URL` in `.env`
+(see [Configuration](#database-mysql-postgres-or-sqlite)) — the script runs the schema
+migration either way.
 
 ### Option C — UI development with hot reload
 
